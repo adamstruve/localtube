@@ -1,10 +1,12 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 import yt_dlp
 import sqlite3
 import threading
 import os.path
+from flask_cors import CORS  # import CORS
 
 app = Flask(__name__)
+CORS(app)  # enable CORS because lol
 
 # Download the video and thumbnail using yt-dlp. 
 def download_video(youtube_url):
@@ -74,6 +76,23 @@ def get_videos():
     videos = [dict(id=row[0], title=row[1], filename=row[2], thumbnail=row[3], url=row[4], video_id=row[5]) for row in c.fetchall()]
     conn.close()
     return jsonify(videos)
+
+# Serve the stuff
+@app.route('/videos/<path:path>')
+def serve_video(path):
+    return send_from_directory('videos', path)
+
+@app.route('/video/<int:video_id>', methods=['GET'])
+def get_video(video_id):
+    conn = sqlite3.connect('videos.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM videos WHERE id=?", (video_id,))
+    video = c.fetchone()
+    conn.close()
+    if video is None:
+        return jsonify({'error': 'Video not found'}), 404
+    else:
+        return jsonify({'id': video[0], 'title': video[1], 'filename': video[2], 'thumbnail': video[3], 'url': video[4], 'video_id': video[5]})
 
 
 if __name__ == '__main__':
