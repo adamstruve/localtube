@@ -24,7 +24,8 @@ def download_video(youtube_url):
         video_title = info_dict.get('title', None)
         video_id = info_dict.get('id', None)
         video_filename = ydl.prepare_filename(info_dict)
-        thumbnail_filename = info_dict['thumbnail']
+        thumbnail_url = info_dict['thumbnail']
+        thumbnail_extension = os.path.splitext(thumbnail_url)[1]
         
         # extract YouTube ID from video filename
         base_name, ext = os.path.splitext(video_filename)
@@ -33,7 +34,8 @@ def download_video(youtube_url):
         # set video filename to YouTube ID
         video_filename = os.path.join('videos', video_id + ext)
         
-    return (video_title, video_id, video_filename, thumbnail_filename)
+    return (video_title, video_id, video_filename, thumbnail_extension)
+
 
 # Route to handle video download and database storage
 @app.route('/download', methods=['POST'])
@@ -51,11 +53,11 @@ def download_and_store():
     
     # Start downloading video and thumbnail in the background
     def download_video_async():
-        video_title, video_id, video_filename, thumbnail_filename = download_video(youtube_url)
+        video_title, video_id, video_filename, thumbnail_extension = download_video(youtube_url)
 
         # Clean up filename and thumbnail name
         video_filename = video_filename.replace('videos/', '')
-        thumbnail_filename = video_id + ".webp"
+        thumbnail_filename = video_id + thumbnail_extension
 
         conn = sqlite3.connect('videos.db')
         c = conn.cursor()
@@ -93,6 +95,38 @@ def get_video(video_id):
         return jsonify({'error': 'Video not found'}), 404
     else:
         return jsonify({'id': video[0], 'title': video[1], 'filename': video[2], 'thumbnail': video[3], 'url': video[4], 'video_id': video[5]})
+
+
+# Delete a video
+@app.route('/delete', methods=['POST'])
+def delete_video():
+    # Get video ID from request body
+    video_id = request.json['id']
+
+    # Look up video in the database
+    conn = sqlite3.connect('videos.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM videos WHERE id=?", (video_id,))
+    video = c.fetchone()
+
+    if video is None:
+        conn.close()
+        return jsonify({'error': 'Video not found'}), 404
+
+    # Delete video file and thumbnail
+    filename = video[2]
+    thumbnail = video[3]
+    if filename:
+        os.remove(os.path.join('videos', filename))
+    if thumbnail:
+        os.remove(os.path.join('videos', thumbnail))
+
+    # Delete video from database
+    c.execute("DELETE FROM videos WHERE id=?", (video_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'message': 'Video deleted successfully!'})
 
 
 if __name__ == '__main__':
