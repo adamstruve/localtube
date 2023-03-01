@@ -98,11 +98,8 @@ def get_video(video_id):
 
 
 # Delete a video
-@app.route('/delete', methods=['POST'])
-def delete_video():
-    # Get video ID from request body
-    video_id = request.json['id']
-
+@app.route('/video/<int:video_id>', methods=['DELETE'])
+def delete_video(video_id):
     # Look up video in the database
     conn = sqlite3.connect('videos.db')
     c = conn.cursor()
@@ -127,6 +124,7 @@ def delete_video():
     conn.close()
 
     return jsonify({'message': 'Video deleted successfully!'})
+
 
 
 if __name__ == '__main__':
