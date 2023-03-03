@@ -133,7 +133,27 @@ def delete_video(video_id):
 
     return jsonify({'message': 'Video deleted successfully!'})
 
+# Search
+@app.route('/search')
+def search():
+    # Get the search query
+    query = request.args.get('q', '')
 
+    # Check the DB for video matches
+    conn = sqlite3.connect('videos.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM videos WHERE title LIKE ?", ('%' + query + '%',))
+    rows = c.fetchall()
+    conn.close()
+
+    # Convert the results to a list of dictionaries
+    results = []
+    for row in rows:
+        result = {'id': row[0], 'title': row[1], 'filename': row[2], 'thumbnail': row[3], 'url': row[4], 'video_id': row[5]}
+        results.append(result)
+
+    # Return the results as JSON
+    return jsonify(results)
 
 if __name__ == '__main__':
     db_file = 'videos.db'
