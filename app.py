@@ -3,6 +3,7 @@ import yt_dlp
 import sqlite3
 import threading
 import os.path
+import requests
 from flask_cors import CORS  # import CORS
 
 app = Flask(__name__)
@@ -13,7 +14,7 @@ def download_video(youtube_url):
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'outtmpl': 'videos/%(id)s.%(ext)s',
-        'writethumbnail': True,
+        'writethumbnail': False,
         'postprocessors': [{
             'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4'
@@ -33,8 +34,15 @@ def download_video(youtube_url):
         
         # set video filename to YouTube ID
         video_filename = os.path.join('videos', video_id + ext)
-        
+
+        # download thumbnail and save with video ID and original extension
+        thumbnail_content = requests.get(thumbnail_url).content
+        thumbnail_filename = os.path.join('videos', video_id + thumbnail_extension)
+        with open(thumbnail_filename, 'wb') as thumbnail_file:
+            thumbnail_file.write(thumbnail_content)
+
     return (video_title, video_id, video_filename, thumbnail_extension)
+
 
 
 # Route to handle video download and database storage
@@ -74,7 +82,7 @@ def download_and_store():
 def get_videos():
     conn = sqlite3.connect('videos.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM videos")
+    c.execute("SELECT * FROM videos WHERE filename IS NOT NULL")
     videos = [dict(id=row[0], title=row[1], filename=row[2], thumbnail=row[3], url=row[4], video_id=row[5]) for row in c.fetchall()]
     conn.close()
     return jsonify(videos)
