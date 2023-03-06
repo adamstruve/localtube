@@ -80,12 +80,32 @@ def download_and_store():
 
 @app.route('/videos', methods=['GET'])
 def get_videos():
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('page_size', 10))
+
     conn = sqlite3.connect('videos.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM videos WHERE filename IS NOT NULL")
+
+    # Count total videos to calculate total pages
+    c.execute("SELECT COUNT(*) FROM videos WHERE filename IS NOT NULL")
+    total_videos = c.fetchone()[0]
+    total_pages = (total_videos + page_size - 1) // page_size
+
+    # Select videos for current page
+    offset = (page - 1) * page_size
+    c.execute("SELECT * FROM videos WHERE filename IS NOT NULL LIMIT ? OFFSET ?", (page_size, offset))
     videos = [dict(id=row[0], title=row[1], filename=row[2], thumbnail=row[3], url=row[4], video_id=row[5]) for row in c.fetchall()]
     conn.close()
-    return jsonify(videos)
+
+    response = {
+        'videos': videos,
+        'page': page,
+        'page_size': page_size,
+        'total_videos': total_videos,
+        'total_pages': total_pages,
+    }
+    return jsonify(response)
+
 
 # Serve the stuff
 @app.route('/videos/<path:path>')
@@ -139,10 +159,18 @@ def search():
     # Get the search query
     query = request.args.get('q', '')
 
-    # Check the DB for video matches
+    # Get pagination parameters
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('page_size', 10))
+
+    # Connect to database and execute query to get matching videos
     conn = sqlite3.connect('videos.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM videos WHERE title LIKE ?", ('%' + query + '%',))
+    c.execute("SELECT COUNT(*) FROM videos WHERE title LIKE ?", ('%' + query + '%',))
+    total_videos = c.fetchone()[0]
+    total_pages = (total_videos + page_size - 1) // page_size
+    offset = (page - 1) * page_size
+    c.execute("SELECT * FROM videos WHERE title LIKE ? LIMIT ? OFFSET ?", ('%' + query + '%', page_size, offset))
     rows = c.fetchall()
     conn.close()
 
@@ -152,8 +180,16 @@ def search():
         result = {'id': row[0], 'title': row[1], 'filename': row[2], 'thumbnail': row[3], 'url': row[4], 'video_id': row[5]}
         results.append(result)
 
-    # Return the results as JSON
-    return jsonify(results)
+    # Return the results and pagination information as JSON
+    response = {
+        'videos': results,
+        'page': page,
+        'page_size': page_size,
+        'total_videos': total_videos,
+        'total_pages': total_pages,
+    }
+    return jsonify(response)
+
 
 if __name__ == '__main__':
     db_file = 'videos.db'
